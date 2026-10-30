@@ -394,7 +394,17 @@ export const INITIAL_STUDENTS: Student[] = [
     absent: 0,
     waliNote: 'Siap menghadapi Asesmen Akhir Jenjang SMP dengan hasil yang mantap.',
   },
-];
+].sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }));
+
+/**
+ * Utility to sort an array of objects containing a 'name' property alphabetically (A-Z)
+ * using Indonesian locale rules and case-insensitivity.
+ */
+export function sortStudentsAlphabetically<T extends { name: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) =>
+    a.name.localeCompare(b.name, 'id', { sensitivity: 'base' })
+  );
+}
 
 export function calculatePredikat(score: number): 'A' | 'B' | 'C' | 'D' {
   if (score >= 88) return 'A';

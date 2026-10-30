@@ -28,6 +28,7 @@ import {
   generateSTSNote,
   getSubjectReligion,
   doesStudentMatchSubjectReligion,
+  sortStudentsAlphabetically,
 } from '../data/initialData';
 
 export const InputNilaiSTSView: React.FC = () => {
@@ -89,13 +90,13 @@ export const InputNilaiSTSView: React.FC = () => {
     [currentSubject]
   );
 
-  // Raw list of students in the current class
+  // Raw list of students in the current class (alphabetically sorted A-Z)
   const rawClassStudents = useMemo(
-    () => students.filter((s) => s.classId === currentClassId),
+    () => sortStudentsAlphabetically(students.filter((s) => s.classId === currentClassId)),
     [students, currentClassId]
   );
 
-  // Filter students for current class: if subject is a religious education subject, only show students of that religion
+  // Filter students for current class: if subject is a religious education subject, only show students of that religion (always sorted A-Z)
   const classStudents = useMemo(() => {
     let list = rawClassStudents;
 
@@ -114,7 +115,7 @@ export const InputNilaiSTSView: React.FC = () => {
       );
     }
 
-    return list;
+    return sortStudentsAlphabetically(list);
   }, [rawClassStudents, targetReligion, searchQuery]);
 
   // Sync initial grades when class or subject changes

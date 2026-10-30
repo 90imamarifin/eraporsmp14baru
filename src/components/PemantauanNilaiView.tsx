@@ -5,6 +5,7 @@ import {
   calculatePredikat,
   doesStudentMatchSubjectReligion,
   getSubjectReligion,
+  sortStudentsAlphabetically,
 } from '../data/initialData';
 import {
   Activity,
@@ -75,9 +76,9 @@ export const PemantauanNilaiView: React.FC<PemantauanNilaiViewProps> = ({ onNavi
     [classes, currentClassId]
   );
 
-  // Students in selected class
+  // Students in selected class (always sorted A-Z)
   const classStudents = useMemo(
-    () => students.filter((s) => s.classId === currentClassId),
+    () => sortStudentsAlphabetically(students.filter((s) => s.classId === currentClassId)),
     [students, currentClassId]
   );
 
@@ -232,22 +233,24 @@ export const PemantauanNilaiView: React.FC<PemantauanNilaiViewProps> = ({ onNavi
     });
   }, [classStudents, sortedSubjects, classGrades]);
 
-  // Filtered students based on query and status filter
+  // Filtered students based on query and status filter (always sorted A-Z)
   const filteredStudents = useMemo(() => {
-    return studentMonitoringData.filter((item) => {
-      const matchesSearch =
-        item.student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.student.nisn.includes(searchQuery) ||
-        item.student.nis.includes(searchQuery);
+    return studentMonitoringData
+      .filter((item) => {
+        const matchesSearch =
+          item.student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.student.nisn.includes(searchQuery) ||
+          item.student.nis.includes(searchQuery);
 
-      if (!matchesSearch) return false;
+        if (!matchesSearch) return false;
 
-      if (filterStatus === 'complete') return item.isFullyReadyForReport;
-      if (filterStatus === 'incomplete') return !item.isAllGradesEntered || !item.hasWaliNote || !item.hasDevNote;
-      if (filterStatus === 'below_kkm') return item.belowKkmCount > 0;
+        if (filterStatus === 'complete') return item.isFullyReadyForReport;
+        if (filterStatus === 'incomplete') return !item.isAllGradesEntered || !item.hasWaliNote || !item.hasDevNote;
+        if (filterStatus === 'below_kkm') return item.belowKkmCount > 0;
 
-      return true;
-    });
+        return true;
+      })
+      .sort((a, b) => a.student.name.localeCompare(b.student.name, 'id', { sensitivity: 'base' }));
   }, [studentMonitoringData, searchQuery, filterStatus]);
 
   // Class-wide summary KPI

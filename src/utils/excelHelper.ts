@@ -22,7 +22,8 @@ export function downloadGradeTemplateExcel(
   const targetRel = getSubjectReligion(subject);
   const classStudents = students
     .filter(s => s.classId === classId)
-    .filter(s => targetRel ? doesStudentMatchSubjectReligion(s.religion, targetRel) : true);
+    .filter(s => targetRel ? doesStudentMatchSubjectReligion(s.religion, targetRel) : true)
+    .sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }));
 
   const rows = classStudents.map((std, index) => ({
     No: index + 1,
@@ -183,9 +184,12 @@ export async function parseGradeExcel(
           }
         }
 
+        parsedGrades.sort((a, b) => a.studentName.localeCompare(b.studentName, 'id', { sensitivity: 'base' }));
+
         const unmatched = classStudents
           .filter(s => !matchedStudentIds.has(s.id))
-          .map(s => s.name);
+          .map(s => s.name)
+          .sort((a, b) => a.localeCompare(b, 'id', { sensitivity: 'base' }));
 
         resolve({
           success: parsedGrades.length > 0,

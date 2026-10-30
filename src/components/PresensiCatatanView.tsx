@@ -7,6 +7,7 @@ import {
   generateStudentNotes,
   NoteStyle,
 } from '../utils/noteGenerator';
+import { sortStudentsAlphabetically } from '../data/initialData';
 import {
   ClipboardCheck,
   Save,
@@ -87,9 +88,9 @@ export const PresensiCatatanView: React.FC = () => {
     return map;
   }, [legerRows]);
 
-  // Local state for batch editing students in this class
+  // Local state for batch editing students in this class (always sorted A-Z)
   const classStudents = useMemo(
-    () => students.filter((s) => s.classId === currentClassId),
+    () => sortStudentsAlphabetically(students.filter((s) => s.classId === currentClassId)),
     [students, currentClassId]
   );
 
@@ -104,18 +105,19 @@ export const PresensiCatatanView: React.FC = () => {
   const [recentlyGeneratedIds, setRecentlyGeneratedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setLocalStudents(classStudents);
+    setLocalStudents(sortStudentsAlphabetically(classStudents));
     setRecentlyGeneratedIds(new Set());
   }, [classStudents, currentClassId]);
 
   const filteredStudents = useMemo(() => {
-    return localStudents.filter((s) =>
+    const list = localStudents.filter((s) =>
       searchQuery
         ? s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           s.nisn.includes(searchQuery) ||
           s.nis.includes(searchQuery)
         : true
     );
+    return sortStudentsAlphabetically(list);
   }, [localStudents, searchQuery]);
 
   // Update single student field

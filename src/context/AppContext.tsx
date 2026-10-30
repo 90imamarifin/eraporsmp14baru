@@ -19,6 +19,7 @@ import {
   generateInitialGrades,
   INITIAL_AUDIT_LOGS,
   calculatePredikat,
+  sortStudentsAlphabetically,
 } from '../data/initialData';
 import { auth, db, googleProvider } from '../lib/firebase';
 import {
@@ -148,10 +149,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 12) return parsed;
+        if (Array.isArray(parsed) && parsed.length >= 1) return sortStudentsAlphabetically(parsed);
       } catch (_) {}
     }
-    return INITIAL_STUDENTS;
+    return sortStudentsAlphabetically(INITIAL_STUDENTS);
   });
 
   const [subjects, setSubjects] = useState<Subject[]>(() => {
@@ -388,7 +389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           batch.commit().catch(() => {});
         } else {
           const list = snapshot.docs.map((d) => d.data() as Student);
-          setStudents(list);
+          setStudents(sortStudentsAlphabetically(list));
         }
       },
       (error) => {
@@ -684,7 +685,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Student operations
   const updateStudent = async (student: Student) => {
-    setStudents((prev) => prev.map((s) => (s.id === student.id ? student : s)));
+    setStudents((prev) =>
+      sortStudentsAlphabetically(prev.map((s) => (s.id === student.id ? student : s)))
+    );
     addAuditLog('UPDATE_SISWA', 'Siswa', `Memperbarui biodata siswa: ${student.name} (${student.nisn}).`);
 
     try {
@@ -699,7 +702,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudents((prev) => {
       const map = new Map(prev.map((s) => [s.id, s]));
       updatedBatch.forEach((s) => map.set(s.id, s));
-      return Array.from(map.values());
+      return sortStudentsAlphabetically(Array.from(map.values()));
     });
 
     addAuditLog(
@@ -723,7 +726,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addStudent = async (studentData: Omit<Student, 'id'>) => {
     const id = `std_${Date.now()}`;
     const newStudent: Student = { ...studentData, id };
-    setStudents((prev) => [...prev, newStudent]);
+    setStudents((prev) => sortStudentsAlphabetically([...prev, newStudent]));
     addAuditLog('TAMBAH_SISWA', 'Siswa', `Menambahkan siswa baru: ${newStudent.name}.`);
 
     try {
@@ -735,7 +738,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteStudent = async (studentId: string) => {
     const std = students.find((s) => s.id === studentId);
-    setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    setStudents((prev) => sortStudentsAlphabetically(prev.filter((s) => s.id !== studentId)));
     addAuditLog('HAPUS_SISWA', 'Siswa', `Menghapus siswa: ${std?.name || studentId}.`);
 
     try {
@@ -756,7 +759,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const sampleIds = new Set(sampleStudents.map((s) => s.id));
-    setStudents((prev) => prev.filter((s) => !sampleIds.has(s.id)));
+    setStudents((prev) => sortStudentsAlphabetically(prev.filter((s) => !sampleIds.has(s.id))));
     addAuditLog(
       'HAPUS_SISWA_SAMPLE',
       'Siswa',
@@ -782,11 +785,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let finalStudents: Student[] = [];
     if (replaceAll) {
       // Completely replace existing students with the newly imported students
-      finalStudents = imported;
+      finalStudents = sortStudentsAlphabetically(imported);
     } else {
       const map = new Map(students.map((s) => [s.nisn, s]));
       imported.forEach((s) => map.set(s.nisn, s));
-      finalStudents = Array.from(map.values());
+      finalStudents = sortStudentsAlphabetically(Array.from(map.values()));
     }
 
     setStudents(finalStudents);
@@ -959,7 +962,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Calculate Leger matrix
   const getLegerData = (classId: string): LegerRow[] => {
-    const classStudents = students.filter((s) => s.classId === classId);
+    const classStudents = sortStudentsAlphabetically(students.filter((s) => s.classId === classId));
 
     const rows: Omit<LegerRow, 'rank'>[] = classStudents.map((std) => {
       const studentGrades = grades.filter(
@@ -1013,7 +1016,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const resetToInitialData = () => {
     localStorage.clear();
     setSchoolProfile(INITIAL_SCHOOL_PROFILE);
-    setStudents(INITIAL_STUDENTS);
+    setStudents(sortStudentsAlphabetically(INITIAL_STUDENTS));
     setClasses(INITIAL_CLASSES);
     setSubjects(INITIAL_SUBJECTS);
     setGrades(generateInitialGrades());

@@ -18,6 +18,7 @@ import {
   generateSTSNote,
   getSubjectReligion,
   doesStudentMatchSubjectReligion,
+  sortStudentsAlphabetically,
 } from '../data/initialData';
 import { generateRaportVerificationCode } from '../utils/security';
 import { generateCatatanWaliKelas, generateCatatanPerkembangan } from '../utils/noteGenerator';
@@ -46,7 +47,7 @@ export const CetakRaporView: React.FC = () => {
   );
 
   const classStudents = useMemo(
-    () => students.filter((s) => s.classId === currentClassId),
+    () => sortStudentsAlphabetically(students.filter((s) => s.classId === currentClassId)),
     [students, currentClassId]
   );
 

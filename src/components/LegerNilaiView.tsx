@@ -32,7 +32,7 @@ export const LegerNilaiView: React.FC = () => {
       : selectedClassId || '7.1'
   );
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'nisn'>('rank');
+  const [sortBy, setSortBy] = useState<'name' | 'rank' | 'nisn'>('name');
 
   const currentClass = useMemo(
     () => classes.find((c) => c.id === currentClassId) || classes[0],
@@ -56,7 +56,7 @@ export const LegerNilaiView: React.FC = () => {
     }
 
     if (sortBy === 'name') {
-      rows.sort((a, b) => a.student.name.localeCompare(b.student.name));
+      rows.sort((a, b) => a.student.name.localeCompare(b.student.name, 'id', { sensitivity: 'base' }));
     } else if (sortBy === 'nisn') {
       rows.sort((a, b) => a.student.nisn.localeCompare(b.student.nisn));
     } else {
@@ -93,7 +93,7 @@ export const LegerNilaiView: React.FC = () => {
       schoolProfile,
       currentClass,
       sortedSubjects,
-      rawLegerRows,
+      sortedLegerRows,
       activeAcademicYear,
       activeSemester
     );
@@ -164,8 +164,8 @@ export const LegerNilaiView: React.FC = () => {
               onChange={(e) => setSortBy(e.target.value as any)}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800"
             >
-              <option value="rank">Peringkat Kelas (Nilai Tertinggi)</option>
               <option value="name">Nama Siswa (A - Z)</option>
+              <option value="rank">Peringkat Kelas (Nilai Tertinggi)</option>
               <option value="nisn">NISN Siswa</option>
             </select>
           </div>

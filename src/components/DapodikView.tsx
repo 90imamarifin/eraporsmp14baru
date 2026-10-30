@@ -24,6 +24,7 @@ import {
   parseStudentExcel,
   StudentParseResult,
 } from '../utils/excelHelper';
+import { sortStudentsAlphabetically } from '../data/initialData';
 
 export const DapodikView: React.FC = () => {
   const {
@@ -81,7 +82,7 @@ export const DapodikView: React.FC = () => {
   });
 
   const filteredStudents = useMemo(() => {
-    return students
+    const list = students
       .filter((s) => (currentClassId === 'all' ? true : s.classId === currentClassId))
       .filter((s) =>
         searchQuery
@@ -91,6 +92,7 @@ export const DapodikView: React.FC = () => {
             (s.religion || '').toLowerCase().includes(searchQuery.toLowerCase())
           : true
       );
+    return sortStudentsAlphabetically(list);
   }, [students, currentClassId, searchQuery]);
 
   // Download master template excel for all rombels
@@ -170,7 +172,7 @@ export const DapodikView: React.FC = () => {
       };
     });
 
-    await importDapodikStudents(importedStudents, replaceOldStudents);
+    await importDapodikStudents(sortStudentsAlphabetically(importedStudents), replaceOldStudents);
     const uniqueRombels = Array.from(new Set(importedStudents.map((s) => s.classId)));
     setIsImportModalOpen(false);
     setParseResult(null);
