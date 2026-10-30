@@ -254,7 +254,7 @@ export const CetakRaporView: React.FC = () => {
             >
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} (Wali: {c.homeroomTeacherName})
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -449,10 +449,13 @@ export const CetakRaporView: React.FC = () => {
                   <thead>
                     <tr className="bg-slate-100 text-slate-900 font-bold text-center">
                       <th className="border border-slate-900 p-2 w-10">No</th>
-                      <th className="border border-slate-900 p-2 text-left min-w-[180px]">
+                      <th className="border border-slate-900 p-2 text-left min-w-[170px]">
                         Mata Pelajaran
                       </th>
-                      <th className="border border-slate-900 p-2 w-20">Nilai STS</th>
+                      <th className="border border-slate-900 p-2 w-16 text-center">
+                        KKM
+                      </th>
+                      <th className="border border-slate-900 p-2 w-20 text-center">Nilai STS</th>
                       <th className="border border-slate-900 p-2 text-left min-w-[280px]">
                         Capaian Kompetensi Tengah Semester
                       </th>
@@ -463,6 +466,9 @@ export const CetakRaporView: React.FC = () => {
                       <tr key={row.code} className="align-top">
                         <td className="border border-slate-900 p-2 text-center">{row.no}</td>
                         <td className="border border-slate-900 p-2 font-medium">{row.name}</td>
+                        <td className="border border-slate-900 p-2 text-center font-bold text-slate-900">
+                          {row.kkm || 75}
+                        </td>
                         <td className="border border-slate-900 p-2 text-center font-bold text-slate-950 text-sm">
                           {row.score}
                         </td>
@@ -473,7 +479,7 @@ export const CetakRaporView: React.FC = () => {
                     ))}
                     {/* Ringkasan Nilai */}
                     <tr className="bg-slate-50 font-bold border-t-2 border-slate-900">
-                      <td colSpan={2} className="border border-slate-900 p-2 text-center">
+                      <td colSpan={3} className="border border-slate-900 p-2 text-center">
                         JUMLAH NILAI & RATA-RATA STS
                       </td>
                       <td className="border border-slate-900 p-2 text-center text-sm font-black text-blue-950">
@@ -572,20 +578,16 @@ export const CetakRaporView: React.FC = () => {
                 </div>
               </div>
 
-              {/* FOOTER RESMI CETAK RAPOR (NAMA SISWA / HALAMAN) */}
+              {/* FOOTER RESMI CETAK RAPOR (NAMA SISWA DAN HALAMAN DI SEBELAH KANAN ITALIC) */}
               <div className="mt-8 pt-3 border-t border-slate-900 flex items-center justify-between text-xs text-slate-900 font-sans">
-                <div className="font-bold flex items-center gap-1.5 tracking-wide">
-                  <span className="uppercase text-slate-950">{student.name}</span>
-                  <span className="text-slate-400 font-normal">/</span>
-                  <span className="font-semibold text-slate-800">
-                    Halaman {printMode === 'all' || selectedStudentId === 'all' ? studentIndex + 1 : 1}
-                  </span>
-                </div>
                 <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
                   <span>Verifikasi: <strong>{verificationCode}</strong></span>
                   <span>•</span>
                   <span>e-Rapor {schoolProfile.name}</span>
+                </div>
+                <div className="italic text-slate-900 text-xs text-right font-serif font-medium">
+                  {student.name} - 1
                 </div>
               </div>
             </div>

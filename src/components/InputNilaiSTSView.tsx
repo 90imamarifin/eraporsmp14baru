@@ -398,7 +398,7 @@ export const InputNilaiSTSView: React.FC = () => {
             >
               {classes.map((cls) => (
                 <option key={cls.id} value={cls.id}>
-                  {cls.name} (Wali: {cls.homeroomTeacherName})
+                  {cls.name}
                 </option>
               ))}
             </select>

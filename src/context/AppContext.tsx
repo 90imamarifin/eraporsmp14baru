@@ -69,7 +69,8 @@ interface AppContextType {
   updateBatchStudents: (students: Student[]) => Promise<void>;
   addStudent: (student: Omit<Student, 'id'>) => Promise<void>;
   deleteStudent: (studentId: string) => Promise<void>;
-  importDapodikStudents: (imported: Student[]) => Promise<void>;
+  clearSampleStudents: () => Promise<number>;
+  importDapodikStudents: (imported: Student[], replaceAll?: boolean) => Promise<void>;
   // Class / Rombel Management (12 Classes)
   addClass: (newClass: ClassGroup) => Promise<void>;
   updateClass: (updatedClass: ClassGroup) => Promise<void>;
@@ -744,22 +745,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const importDapodikStudents = async (imported: Student[]) => {
+  const clearSampleStudents = async (): Promise<number> => {
     setIsSyncing(true);
-    setStudents((prev) => {
-      const map = new Map(prev.map((s) => [s.nisn, s]));
-      imported.forEach((s) => map.set(s.nisn, s));
-      return Array.from(map.values());
-    });
+    const sampleStudents = students.filter(
+      (s) => s.id.startsWith('std_00') || s.nisn.startsWith('01123456')
+    );
+    if (sampleStudents.length === 0) {
+      setIsSyncing(false);
+      return 0;
+    }
 
+    const sampleIds = new Set(sampleStudents.map((s) => s.id));
+    setStudents((prev) => prev.filter((s) => !sampleIds.has(s.id)));
     addAuditLog(
-      'SINKRONISASI_DAPODIK',
-      'Dapodik',
-      `Sinkronisasi berhasil mengimpor ${imported.length} data siswa dari Dapodik.`
+      'HAPUS_SISWA_SAMPLE',
+      'Siswa',
+      `Menghapus ${sampleStudents.length} data siswa contoh/sample bawaan.`
     );
 
     try {
       const batch = writeBatch(db);
+      sampleStudents.forEach((s) => {
+        batch.delete(doc(db, 'students', s.id));
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error('Clear sample students error:', err);
+    }
+    setIsSyncing(false);
+    return sampleStudents.length;
+  };
+
+  const importDapodikStudents = async (imported: Student[], replaceAll: boolean = true) => {
+    setIsSyncing(true);
+
+    let finalStudents: Student[] = [];
+    if (replaceAll) {
+      // Completely replace existing students with the newly imported students
+      finalStudents = imported;
+    } else {
+      const map = new Map(students.map((s) => [s.nisn, s]));
+      imported.forEach((s) => map.set(s.nisn, s));
+      finalStudents = Array.from(map.values());
+    }
+
+    setStudents(finalStudents);
+
+    addAuditLog(
+      'SINKRONISASI_DAPODIK',
+      'Dapodik',
+      `Sinkronisasi berhasil mengimpor ${imported.length} data siswa (${replaceAll ? 'mengganti total data lama/sample' : 'menggabungkan data'}).`
+    );
+
+    try {
+      const batch = writeBatch(db);
+      if (replaceAll) {
+        // Delete all old students that are not in the newly imported dataset
+        const newIds = new Set(imported.map((s) => s.id));
+        students.forEach((oldStudent) => {
+          if (!newIds.has(oldStudent.id)) {
+            batch.delete(doc(db, 'students', oldStudent.id));
+          }
+        });
+      }
       imported.forEach((s) => {
         batch.set(doc(db, 'students', s.id), s);
       });
@@ -1006,6 +1054,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateBatchStudents,
         addStudent,
         deleteStudent,
+        clearSampleStudents,
         importDapodikStudents,
         addClass,
         updateClass,

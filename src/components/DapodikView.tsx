@@ -35,6 +35,7 @@ export const DapodikView: React.FC = () => {
     updateStudent,
     addStudent,
     deleteStudent,
+    clearSampleStudents,
     importDapodikStudents,
   } = useApp();
 
@@ -53,6 +54,7 @@ export const DapodikView: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isParsingExcel, setIsParsingExcel] = useState<boolean>(false);
   const [parseResult, setParseResult] = useState<StudentParseResult | null>(null);
+  const [replaceOldStudents, setReplaceOldStudents] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit / Add modal
@@ -94,6 +96,30 @@ export const DapodikView: React.FC = () => {
   // Download master template excel for all rombels
   const handleDownloadTemplate = () => {
     downloadStudentTemplateExcel(schoolProfile.name);
+  };
+
+  // Check if sample/dummy students are currently present
+  const hasSampleStudents = useMemo(() => {
+    return students.some(
+      (s) => s.id.startsWith('std_00') || s.nisn.startsWith('01123456')
+    );
+  }, [students]);
+
+  // One-click cleanup of default dummy/sample students
+  const handleClearSampleStudents = async () => {
+    const sampleCount = students.filter(
+      (s) => s.id.startsWith('std_00') || s.nisn.startsWith('01123456')
+    ).length;
+    if (
+      !window.confirm(
+        `Apakah Anda yakin ingin menghapus ${sampleCount} data siswa sample/contoh bawaan sistem? Data siswa riil yang Anda impor tidak akan terhapus.`
+      )
+    ) {
+      return;
+    }
+    const count = await clearSampleStudents();
+    setSyncSuccessMsg(`Berhasil menghapus ${count} data siswa sample bawaan.`);
+    setTimeout(() => setSyncSuccessMsg(''), 4000);
   };
 
   // Handle Excel file selection for student import
@@ -144,12 +170,12 @@ export const DapodikView: React.FC = () => {
       };
     });
 
-    await importDapodikStudents(importedStudents);
+    await importDapodikStudents(importedStudents, replaceOldStudents);
     const uniqueRombels = Array.from(new Set(importedStudents.map((s) => s.classId)));
     setIsImportModalOpen(false);
     setParseResult(null);
     setSyncSuccessMsg(
-      `Berhasil mengimpor ${importedStudents.length} siswa dan otomatis didistribusikan ke dalam ${uniqueRombels.length} rombel (${uniqueRombels.sort().join(', ')})!`
+      `Berhasil mengimpor ${importedStudents.length} siswa ${replaceOldStudents ? '(data siswa sample/lama telah dibersihkan)' : ''} dan otomatis didistribusikan ke dalam ${uniqueRombels.length} rombel (${uniqueRombels.sort().join(', ')})!`
     );
     setTimeout(() => setSyncSuccessMsg(''), 6000);
   };
@@ -236,6 +262,18 @@ export const DapodikView: React.FC = () => {
               Impor Master Siswa Semua Rombel
             </button>
 
+            {/* Hapus Siswa Sample bawaan */}
+            {hasSampleStudents && (
+              <button
+                onClick={handleClearSampleStudents}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 py-2 text-xs font-semibold shadow-xs transition-all"
+                title="Bersihkan data siswa sample/contoh bawaan sistem"
+              >
+                <Trash2 className="h-4 w-4 text-rose-600" />
+                Hapus Siswa Sample
+              </button>
+            )}
+
             <button
               onClick={handleSyncDapodik}
               disabled={isSyncingDapodik}
@@ -300,7 +338,7 @@ export const DapodikView: React.FC = () => {
               {isSuperAdmin && <option value="all">Semua Kelas ({students.length} Siswa)</option>}
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} (Wali: {c.homeroomTeacherName})
+                  {c.name}
                 </option>
               ))}
             </select>
@@ -754,6 +792,23 @@ export const DapodikView: React.FC = () => {
                           ))}
                       </div>
                     </div>
+                  )}
+
+                  {parseResult.success && parseResult.students.length > 0 && (
+                    <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={replaceOldStudents}
+                        onChange={(e) => setReplaceOldStudents(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-amber-400 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <span className="font-bold">Hapus & Ganti Seluruh Siswa Sample / Lama</span>
+                        <p className="text-[11px] text-amber-800 font-normal mt-0.5 leading-snug">
+                          Jika dicentang, seluruh data siswa contoh/sample sebelumnya akan otomatis dihapus bersih dan digantikan 100% oleh {parseResult.students.length} siswa yang Anda unggah.
+                        </p>
+                      </div>
+                    </label>
                   )}
 
                   {parseResult.success && parseResult.students.length > 0 && (

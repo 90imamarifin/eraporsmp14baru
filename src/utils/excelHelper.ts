@@ -115,7 +115,7 @@ export async function parseGradeExcel(
             const cell = String(row[j] || '').trim().toLowerCase();
             if (cell.includes('nisn')) colNISN = j;
             if (cell === 'nis' || (cell.includes('nis') && !cell.includes('nisn'))) colNIS = j;
-            if (cell.includes('nama')) colName = j;
+            if (cell.includes('nama siswa') || cell.includes('nama lengkap') || (cell.includes('nama') && !cell.includes('sekolah') && !cell.includes('mapel') && !cell.includes('guru') && !cell.includes('pelajaran'))) colName = j;
             if (cell.includes('nilai') || cell.includes('sts') || cell.includes('skor')) colScore = j;
             if (cell.includes('catatan') || cell.includes('keterangan')) colNote = j;
           }
@@ -457,13 +457,13 @@ export async function parseStudentExcel(
             const cell = String(row[j] || '').trim().toLowerCase();
             if (cell.includes('nisn')) colNISN = j;
             else if (cell === 'nis' || (cell.includes('nis') && !cell.includes('nisn'))) colNIS = j;
-            else if (cell.includes('nama')) colName = j;
+            else if (cell.includes('orang tua') || cell.includes('ortu') || cell.includes('wali') || cell.includes('ayah') || cell.includes('ibu')) colParent = j;
+            else if (cell.includes('nama siswa') || cell.includes('nama lengkap') || cell.includes('nama peserta') || (cell.includes('nama') && !cell.includes('orang tua') && !cell.includes('ortu') && !cell.includes('wali') && !cell.includes('sekolah') && !cell.includes('guru'))) colName = j;
             else if (cell.includes('kelamin') || cell.includes('jk') || cell === 'l/p') colGender = j;
             else if (cell.includes('kelas') || cell.includes('rombel')) colClass = j;
             else if (cell.includes('tempat') || (cell.includes('lahir') && cell.includes('tempat'))) colBirthPlace = j;
             else if (cell.includes('tanggal') || cell.includes('tgl')) colBirthDate = j;
             else if (cell.includes('agama')) colReligion = j;
-            else if (cell.includes('orang tua') || cell.includes('ortu') || cell.includes('wali') || cell.includes('ayah')) colParent = j;
             else if (cell.includes('alamat')) colAddress = j;
           }
 

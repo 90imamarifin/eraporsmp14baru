@@ -373,7 +373,7 @@ export const PemantauanNilaiView: React.FC<PemantauanNilaiViewProps> = ({ onNavi
             >
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} (Wali: {c.homeroomTeacherName})
+                  {c.name}
                 </option>
               ))}
             </select>
