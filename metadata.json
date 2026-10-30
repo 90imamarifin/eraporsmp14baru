@@ -1,0 +1,6 @@
+{
+  "name": "e-Rapor SMPN 14 Tulang Bawang Barat",
+  "description": "Aplikasi e-Rapor resmi SMPN 14 Tulang Bawang Barat untuk input nilai STS, cetak rapor PDF, leger nilai, dan sinkronisasi Dapodik.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

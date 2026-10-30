@@ -1,0 +1,165 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Admin",
+      "description": "Administrator with full system privileges",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["super_admin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile for teachers and administrators",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "wali_kelas"] },
+        "classAssigned": { "type": "string" },
+        "nip": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email", "name", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Dapodik synchronized student information",
+      "type": "object",
+      "properties": {
+        "nisn": { "type": "string", "maxLength": 20 },
+        "nis": { "type": "string", "maxLength": 20 },
+        "name": { "type": "string", "maxLength": 100 },
+        "gender": { "type": "string", "enum": ["L", "P"] },
+        "classId": { "type": "string", "maxLength": 20 },
+        "religion": { "type": "string", "maxLength": 50 },
+        "birthPlace": { "type": "string", "maxLength": 100 },
+        "birthDate": { "type": "string", "maxLength": 20 },
+        "parentName": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 255 },
+        "status": { "type": "string", "enum": ["aktif", "mutasi", "lulus"] },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["nisn", "name", "gender", "classId"]
+    },
+    "Grade": {
+      "title": "Grade",
+      "description": "Mid-semester STS score per student and subject",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 100 },
+        "classId": { "type": "string", "maxLength": 20 },
+        "subjectId": { "type": "string", "maxLength": 50 },
+        "academicYear": { "type": "string", "maxLength": 20 },
+        "semester": { "type": "string", "enum": ["1", "2"] },
+        "stsScore": { "type": "number" },
+        "predikat": { "type": "string", "maxLength": 10 },
+        "catatan": { "type": "string", "maxLength": 300 },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["studentId", "classId", "subjectId", "academicYear", "semester", "stsScore"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "Classroom metadata",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 50 },
+        "gradeLevel": { "type": "string", "maxLength": 10 },
+        "homeroomTeacherId": { "type": "string", "maxLength": 100 },
+        "academicYear": { "type": "string", "maxLength": 20 },
+        "studentCount": { "type": "number" }
+      },
+      "required": ["name", "gradeLevel"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Subject information for SMP Kurikulum Merdeka",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "maxLength": 20 },
+        "name": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "enum": ["umum", "pilihan", "mulok"] },
+        "kkm": { "type": "number" },
+        "orderIndex": { "type": "number" }
+      },
+      "required": ["code", "name"]
+    },
+    "SchoolProfile": {
+      "title": "SchoolProfile",
+      "description": "School identity and academic semester settings",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 120 },
+        "npsn": { "type": "string", "maxLength": 20 },
+        "address": { "type": "string", "maxLength": 255 },
+        "subDistrict": { "type": "string", "maxLength": 100 },
+        "district": { "type": "string", "maxLength": 100 },
+        "province": { "type": "string", "maxLength": 100 },
+        "postalCode": { "type": "string", "maxLength": 20 },
+        "headmasterName": { "type": "string", "maxLength": 100 },
+        "headmasterNip": { "type": "string", "maxLength": 50 },
+        "academicYearActive": { "type": "string", "maxLength": 20 },
+        "semesterActive": { "type": "string", "enum": ["1", "2"] },
+        "reportDate": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "npsn", "academicYearActive", "semesterActive"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System activity history log",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "maxLength": 100 },
+        "entity": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 255 },
+        "performedBy": { "type": "string", "maxLength": 100 },
+        "performedByName": { "type": "string", "maxLength": 100 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["action", "performedBy", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "Authorized administrators list"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Teacher and admin profiles"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Student roster from Dapodik"
+    },
+    "/grades/{gradeId}": {
+      "schema": "Grade",
+      "description": "STS mid-semester grades"
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Classes and homeroom teachers"
+    },
+    "/subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Subjects curriculum"
+    },
+    "/school_profile/{docId}": {
+      "schema": "SchoolProfile",
+      "description": "Official school information"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "History of changes"
+    }
+  }
+}
