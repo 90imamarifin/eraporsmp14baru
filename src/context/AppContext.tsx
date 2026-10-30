@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   User,
   Student,
@@ -20,7 +20,7 @@ import {
   INITIAL_AUDIT_LOGS,
   calculatePredikat,
 } from '../data/initialData';
-import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auth, db, googleProvider } from '../lib/firebase';
 import {
   signInWithPopup,
   signOut,
@@ -54,6 +54,7 @@ interface AppContextType {
   isSyncing: boolean;
   users: User[];
   firebaseUser: FirebaseUser | null;
+  lastSyncTime: string | null;
   // Actions
   login: (email: string, role?: UserRole) => boolean;
   loginWithGoogle: () => Promise<boolean>;
@@ -100,7 +101,6 @@ const STORAGE_KEYS = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Initial State from localStorage or Seeds
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.USER);
     if (saved) {
@@ -208,10 +208,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [isOnline, setIsOnline] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
-  // Sync to local storage
+  const isSeedingRef = useRef<boolean>(false);
+
+  // Sync to local storage for offline resilience
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(currentUser));
@@ -248,7 +251,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify(auditLogs));
   }, [auditLogs]);
 
-  // When current user changes, if wali kelas, automatically select their assigned class
   useEffect(() => {
     if (currentUser?.role === 'wali_kelas' && currentUser.classAssigned) {
       setSelectedClassId(currentUser.classAssigned);
@@ -270,25 +272,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setAuditLogs((prev) => [newLog, ...prev].slice(0, 200));
 
-      if (auth.currentUser) {
-        try {
-          await setDoc(doc(db, 'audit_logs', newLog.id), newLog);
-        } catch (err) {
-          console.warn('Gagal sinkron audit log ke cloud:', err);
-        }
+      try {
+        await setDoc(doc(db, 'audit_logs', newLog.id), newLog);
+      } catch (err) {
+        console.warn('Gagal sinkron audit log ke cloud:', err);
       }
     },
     [currentUser]
   );
 
   // ==========================================
-  // REAL-TIME FIRESTORE LISTENER (MULTI-CLIENT)
+  // 1. Observe Firebase Auth State
   // ==========================================
   useEffect(() => {
-    // 1. Observe Firebase Auth state
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
-      setIsOnline(!!fbUser);
 
       if (fbUser) {
         const email = fbUser.email || '';
@@ -324,30 +322,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => unsubscribeAuth();
   }, []);
 
-  // 2. Setup real-time Firestore listeners when user is authenticated
+  // =========================================================================
+  // 2. Unconditional Realtime Firestore Sync (Active for all multi-clients)
+  // =========================================================================
   useEffect(() => {
-    if (!firebaseUser) return;
-
     setIsSyncing(true);
 
     // A. Realtime Classes
     const unsubClasses = onSnapshot(
       collection(db, 'classes'),
       (snapshot) => {
-        if (snapshot.empty) {
-          // Initial seed to Cloud
+        setIsOnline(true);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+        if (snapshot.empty && !isSeedingRef.current) {
+          isSeedingRef.current = true;
           const batch = writeBatch(db);
           INITIAL_CLASSES.forEach((c) => {
             batch.set(doc(db, 'classes', c.id), c);
           });
           batch.commit().catch(() => {});
-        } else {
+        } else if (!snapshot.empty) {
           const list = snapshot.docs.map((d) => d.data() as ClassGroup);
           setClasses(list);
         }
       },
       (error) => {
-        console.warn('Realtime classes error:', error);
+        console.warn('Classes onSnapshot error:', error);
       }
     );
 
@@ -355,6 +355,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubSubjects = onSnapshot(
       collection(db, 'subjects'),
       (snapshot) => {
+        setIsOnline(true);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
         if (snapshot.empty) {
           const batch = writeBatch(db);
           INITIAL_SUBJECTS.forEach((s) => {
@@ -367,7 +369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       (error) => {
-        console.warn('Realtime subjects error:', error);
+        console.warn('Subjects onSnapshot error:', error);
       }
     );
 
@@ -375,6 +377,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubStudents = onSnapshot(
       collection(db, 'students'),
       (snapshot) => {
+        setIsOnline(true);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
         if (snapshot.empty) {
           const batch = writeBatch(db);
           INITIAL_STUDENTS.forEach((s) => {
@@ -387,14 +391,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       (error) => {
-        console.warn('Realtime students error:', error);
+        console.warn('Students onSnapshot error:', error);
       }
     );
 
-    // D. Realtime Grades
+    // D. Realtime Grades (STS Assessment)
     const unsubGrades = onSnapshot(
       collection(db, 'grades'),
       (snapshot) => {
+        setIsOnline(true);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
         if (snapshot.empty) {
           const seedGrades = generateInitialGrades();
           const batch = writeBatch(db);
@@ -408,7 +414,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       (error) => {
-        console.warn('Realtime grades error:', error);
+        console.warn('Grades onSnapshot error:', error);
       }
     );
 
@@ -416,6 +422,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubProfile = onSnapshot(
       doc(db, 'school_profile', 'main'),
       (docSnap) => {
+        setIsOnline(true);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
         if (docSnap.exists()) {
           const data = docSnap.data() as SchoolProfile;
           setSchoolProfile(data);
@@ -426,7 +434,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       (error) => {
-        console.warn('Realtime school_profile error:', error);
+        console.warn('School Profile onSnapshot error:', error);
       }
     );
 
@@ -439,13 +447,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubAudit = onSnapshot(
       auditQuery,
       (snapshot) => {
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
         if (!snapshot.empty) {
           const list = snapshot.docs.map((d) => d.data() as AuditLog);
           setAuditLogs(list);
         }
       },
       (error) => {
-        console.warn('Realtime audit_logs error:', error);
+        console.warn('Audit Logs onSnapshot error:', error);
       }
     );
 
@@ -465,7 +474,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       (error) => {
-        console.warn('Realtime users error:', error);
+        console.warn('Users onSnapshot error:', error);
       }
     );
 
@@ -480,7 +489,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubAudit();
       unsubUsers();
     };
-  }, [firebaseUser]);
+  }, []);
 
   // Login handler
   const login = (email: string, role?: UserRole): boolean => {
@@ -503,6 +512,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setUsers((prev) => [...prev, newUser]);
       setCurrentUser(newUser);
+      setDoc(doc(db, 'users', newUser.id), newUser).catch(() => {});
       addAuditLog('REGISTER_LOGIN', 'Autentikasi', `Pengguna baru ${newUser.name} masuk.`);
       return true;
     }
@@ -510,7 +520,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   };
 
-  // Google Login via Firebase (MANDATORY FOR MULTI-CLIENT REALTIME)
+  // Google Login via Firebase
   const loginWithGoogle = async (): Promise<boolean> => {
     try {
       setIsSyncing(true);
@@ -537,7 +547,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (!existingUser) {
         setUsers((prev) => [...prev, userToSet]);
-        // Also register in Firestore users collection
         setDoc(doc(db, 'users', res.user.uid), userToSet).catch(() => {});
       }
 
@@ -547,11 +556,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return true;
     } catch (err: any) {
       console.error('Google Sign In failed:', err);
-      const adminRio =
+      const adminUser =
         users.find((u) => u.email === '90imamarifin@gmail.com' || u.email === '22riosandi@gmail.com') ||
         INITIAL_USERS[1];
-      setCurrentUser(adminRio);
-      addAuditLog('LOGIN_FALLBACK', 'Autentikasi', `Login sesi lokal untuk ${adminRio.name}.`);
+      setCurrentUser(adminUser);
+      addAuditLog('LOGIN_FALLBACK', 'Autentikasi', `Login sesi lokal untuk ${adminUser.name}.`);
       return false;
     } finally {
       setIsSyncing(false);
@@ -589,9 +598,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Periode aktif diubah ke TP ${year} Semester ${semester === '1' ? 'Ganjil' : 'Genap'}.`
     );
 
-    if (auth.currentUser) {
-      setDoc(doc(db, 'school_profile', 'main'), updated).catch(() => {});
-    }
+    setDoc(doc(db, 'school_profile', 'main'), updated).catch(() => {});
   };
 
   const updateSchoolProfile = async (profileUpdate: Partial<SchoolProfile>) => {
@@ -599,16 +606,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSchoolProfile(updated);
     addAuditLog('UPDATE_PROFIL_SEKOLAH', 'Sekolah', 'Identitas sekolah SMPN 14 Tulang Bawang Barat diperbarui.');
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'school_profile', 'main'), updated);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'school_profile/main');
-      }
+    try {
+      await setDoc(doc(db, 'school_profile', 'main'), updated);
+    } catch (err) {
+      console.error('Update School Profile error:', err);
     }
   };
 
-  // Grade operations (Real-time synced)
+  // Grade operations (Direct Real-time Broadcast)
   const saveGrade = async (gradeData: Omit<STSGrade, 'id' | 'updatedAt' | 'updatedBy'>) => {
     const gradeId = `grade_${gradeData.studentId}_${gradeData.subjectId}_${gradeData.academicYear}_${gradeData.semester}`;
     const newGrade: STSGrade = {
@@ -619,7 +624,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedBy: currentUser?.name || 'Wali Kelas',
     };
 
-    // Optimistic local update
+    // Optimistic local state update
     setGrades((prev) => {
       const idx = prev.findIndex((g) => g.id === gradeId);
       if (idx >= 0) {
@@ -630,12 +635,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...prev, newGrade];
     });
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'grades', gradeId), newGrade);
-      } catch (err) {
-        console.error('Failed to sync grade:', err);
-      }
+    try {
+      await setDoc(doc(db, 'grades', gradeId), newGrade);
+    } catch (err) {
+      console.error('Failed to sync grade to cloud:', err);
     }
   };
 
@@ -652,7 +655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedBy: updater,
     }));
 
-    // Optimistic local update
+    // Optimistic local state update
     setGrades((prev) => {
       const map = new Map(prev.map((item) => [item.id, item]));
       fullGrades.forEach((g) => map.set(g.id, g));
@@ -665,16 +668,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Menyimpan massal ${fullGrades.length} nilai STS untuk Kelas ${fullGrades[0]?.classId}.`
     );
 
-    if (auth.currentUser) {
-      try {
-        const batch = writeBatch(db);
-        fullGrades.forEach((g) => {
-          batch.set(doc(db, 'grades', g.id), g);
-        });
-        await batch.commit();
-      } catch (err) {
-        console.error('Batch grade sync error:', err);
-      }
+    try {
+      const batch = writeBatch(db);
+      fullGrades.forEach((g) => {
+        batch.set(doc(db, 'grades', g.id), g);
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error('Batch grade sync error:', err);
     }
 
     setIsSyncing(false);
@@ -685,12 +686,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudents((prev) => prev.map((s) => (s.id === student.id ? student : s)));
     addAuditLog('UPDATE_SISWA', 'Siswa', `Memperbarui biodata siswa: ${student.name} (${student.nisn}).`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'students', student.id), student);
-      } catch (err) {
-        console.error('Update student sync error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'students', student.id), student);
+    } catch (err) {
+      console.error('Update student sync error:', err);
     }
   };
 
@@ -708,16 +707,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Memperbarui presensi dan catatan wali kelas untuk ${updatedBatch.length} siswa.`
     );
 
-    if (auth.currentUser) {
-      try {
-        const batch = writeBatch(db);
-        updatedBatch.forEach((s) => {
-          batch.set(doc(db, 'students', s.id), s);
-        });
-        await batch.commit();
-      } catch (err) {
-        console.error('Batch students sync error:', err);
-      }
+    try {
+      const batch = writeBatch(db);
+      updatedBatch.forEach((s) => {
+        batch.set(doc(db, 'students', s.id), s);
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error('Batch students sync error:', err);
     }
     setIsSyncing(false);
   };
@@ -728,12 +725,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudents((prev) => [...prev, newStudent]);
     addAuditLog('TAMBAH_SISWA', 'Siswa', `Menambahkan siswa baru: ${newStudent.name}.`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'students', id), newStudent);
-      } catch (err) {
-        console.error('Add student error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'students', id), newStudent);
+    } catch (err) {
+      console.error('Add student error:', err);
     }
   };
 
@@ -742,12 +737,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
     addAuditLog('HAPUS_SISWA', 'Siswa', `Menghapus siswa: ${std?.name || studentId}.`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'students', studentId));
-      } catch (err) {
-        console.error('Delete student error:', err);
-      }
+    try {
+      await deleteDoc(doc(db, 'students', studentId));
+    } catch (err) {
+      console.error('Delete student error:', err);
     }
   };
 
@@ -765,16 +758,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Sinkronisasi berhasil mengimpor ${imported.length} data siswa dari Dapodik.`
     );
 
-    if (auth.currentUser) {
-      try {
-        const batch = writeBatch(db);
-        imported.forEach((s) => {
-          batch.set(doc(db, 'students', s.id), s);
-        });
-        await batch.commit();
-      } catch (err) {
-        console.error('Import Dapodik error:', err);
-      }
+    try {
+      const batch = writeBatch(db);
+      imported.forEach((s) => {
+        batch.set(doc(db, 'students', s.id), s);
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error('Import Dapodik error:', err);
     }
 
     setIsSyncing(false);
@@ -785,12 +776,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setClasses((prev) => [...prev, newClass]);
     addAuditLog('TAMBAH_ROMBEL', 'Rombel', `Menambahkan rombel kelas baru: ${newClass.name}.`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'classes', newClass.id), newClass);
-      } catch (err) {
-        console.error('Add class error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'classes', newClass.id), newClass);
+    } catch (err) {
+      console.error('Add class error:', err);
     }
   };
 
@@ -798,12 +787,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setClasses((prev) => prev.map((c) => (c.id === updatedClass.id ? updatedClass : c)));
     addAuditLog('UPDATE_ROMBEL', 'Rombel', `Memperbarui rombel kelas: ${updatedClass.name}.`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'classes', updatedClass.id), updatedClass);
-      } catch (err) {
-        console.error('Update class error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'classes', updatedClass.id), updatedClass);
+    } catch (err) {
+      console.error('Update class error:', err);
     }
   };
 
@@ -812,12 +799,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setClasses((prev) => prev.filter((c) => c.id !== classId));
     addAuditLog('HAPUS_ROMBEL', 'Rombel', `Menghapus rombel kelas: ${cls?.name || classId}.`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'classes', classId));
-      } catch (err) {
-        console.error('Delete class error:', err);
-      }
+    try {
+      await deleteDoc(doc(db, 'classes', classId));
+    } catch (err) {
+      console.error('Delete class error:', err);
     }
   };
 
@@ -832,12 +817,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Menambahkan mata pelajaran: ${newSubject.name} (${newSubject.code}).`
     );
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'subjects', id), newSubject);
-      } catch (err) {
-        console.error('Add subject error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'subjects', id), newSubject);
+    } catch (err) {
+      console.error('Add subject error:', err);
     }
   };
 
@@ -849,12 +832,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     addAuditLog('UPDATE_MAPEL', 'Mata Pelajaran', `Memperbarui mata pelajaran: ${updatedSubject.name}.`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'subjects', updatedSubject.id), updatedSubject);
-      } catch (err) {
-        console.error('Update subject error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'subjects', updatedSubject.id), updatedSubject);
+    } catch (err) {
+      console.error('Update subject error:', err);
     }
   };
 
@@ -863,12 +844,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSubjects((prev) => prev.filter((s) => s.id !== subjectId));
     addAuditLog('HAPUS_MAPEL', 'Mata Pelajaran', `Menghapus mata pelajaran: ${sub?.name || subjectId}.`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'subjects', subjectId));
-      } catch (err) {
-        console.error('Delete subject error:', err);
-      }
+    try {
+      await deleteDoc(doc(db, 'subjects', subjectId));
+    } catch (err) {
+      console.error('Delete subject error:', err);
     }
   };
 
@@ -888,12 +867,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     addAuditLog('TAMBAH_AKUN', 'Pengguna', `Menambahkan akun guru/wali: ${newUser.name}.`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'users', id), newUser);
-      } catch (err) {
-        console.error('Add user error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'users', id), newUser);
+    } catch (err) {
+      console.error('Add user error:', err);
     }
   };
 
@@ -913,12 +890,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     addAuditLog('UPDATE_AKUN', 'Pengguna', `Memperbarui akun pengguna: ${user.name}.`);
 
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'users', user.id), user);
-      } catch (err) {
-        console.error('Update user error:', err);
-      }
+    try {
+      await setDoc(doc(db, 'users', user.id), user);
+    } catch (err) {
+      console.error('Update user error:', err);
     }
   };
 
@@ -927,12 +902,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     addAuditLog('HAPUS_AKUN', 'Pengguna', `Menghapus akun: ${target?.name || userId}.`);
 
-    if (auth.currentUser) {
-      try {
-        await deleteDoc(doc(db, 'users', userId));
-      } catch (err) {
-        console.error('Delete user error:', err);
-      }
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+    } catch (err) {
+      console.error('Delete user error:', err);
     }
   };
 
@@ -1019,6 +992,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSyncing,
         users,
         firebaseUser,
+        lastSyncTime,
         login,
         loginWithGoogle,
         logout,

@@ -30,6 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate }) => {
     switchUser,
     logout,
     loginWithGoogle,
+    lastSyncTime,
   } = useApp();
 
   const [showUserDropdown, setShowUserDropdown] = React.useState(false);
@@ -71,22 +72,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate }) => {
             </span>
           </div>
 
-          {/* Firebase Realtime Connection Indicator */}
-          <button
-            onClick={() => {
-              if (!isOnline && !isSyncing) {
-                loginWithGoogle();
-              }
-            }}
-            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors ${
+          {/* Firebase Realtime Multi-Device Connection Indicator */}
+          <div
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border shadow-sm ${
               isOnline
-                ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-200'
-                : 'bg-rose-950/60 border-rose-500/30 text-rose-200 hover:bg-rose-900/60 cursor-pointer'
+                ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
+                : 'bg-rose-950/70 border-rose-500/40 text-rose-200'
             }`}
             title={
               isOnline
-                ? 'Terhubung dengan Firebase Cloud Realtime (Kolaborasi Aktif Antar-Client)'
-                : 'Mode Lokal — Klik untuk Masuk Google & Aktifkan Kolaborasi Realtime'
+                ? `Sinkronisasi Realtime Multi-Perangkat Aktif (Terakhir: ${lastSyncTime || 'Baru saja'})`
+                : 'Menghubungkan ke server realtime cloud...'
             }
           >
             {isSyncing ? (
@@ -100,9 +96,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate }) => {
               <WifiOff className="h-3.5 w-3.5 text-rose-400" />
             )}
             <span className="text-[11px] font-semibold hidden sm:inline">
-              {isSyncing ? 'Sinkron...' : isOnline ? 'Realtime Aktif' : 'Aktifkan Realtime'}
+              {isSyncing
+                ? 'Menyinkronkan...'
+                : isOnline
+                ? 'Realtime Multi-Perangkat'
+                : 'Menghubungkan...'}
             </span>
-          </button>
+          </div>
 
           {/* Quick Switch Role Dropdown */}
           <div className="relative">
